@@ -2,6 +2,13 @@
   "identifier": "com.zoly.bobplugin.aidict",
   "versions": [
     {
+      "version": "0.2.1",
+      "desc": "修复单词查询流式预览闪烁",
+      "sha256": "71fb60dc3ea17c9939c0c54a894b4f1a4622d020e952cd443830b63c780e031e",
+      "url": "https://github.com/zo-ly/bob-plugin-ai-dict/releases/download/v0.2.1/ai-dict-0.2.1.bobplugin",
+      "minBobVersion": "1.6.0"
+    },
+    {
       "version": "0.2.0",
       "desc": "新增「附加请求参数」设置项，可关闭思考模式；思考等待时显示占位提示",
       "sha256": "ef13275c5abd889f016514de622dea91c129ddf42e40584dc15dbb8b7d99fc6c",
