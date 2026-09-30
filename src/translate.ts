@@ -193,6 +193,7 @@ export const translate: TextTranslate = (query, completion) => {
 
   function runStream(): void {
     let targetText = '';
+    let dictPreviewSource = '';
     let sawReasoning = false;
     let streamError: { message?: string } | null = null;
     const parser = createOpenAiSseParser();
@@ -224,11 +225,17 @@ export const translate: TextTranslate = (query, completion) => {
         }
         for (const delta of deltas) {
           targetText += delta;
+          // 词典预览只渲染完整行：半行会先露出标签原文或空值，逐帧跳动
+          if (dictMode) {
+            const complete = targetText.slice(0, targetText.lastIndexOf('\n') + 1);
+            if (!complete.trim() || complete === dictPreviewSource) continue;
+            dictPreviewSource = complete;
+          }
           query.onStream({
             result: {
               from: query.detectFrom,
               to: query.detectTo,
-              toParagraphs: dictMode ? dictPreviewParagraphs(targetText) : textToParagraphs(targetText),
+              toParagraphs: dictMode ? dictPreviewParagraphs(dictPreviewSource) : textToParagraphs(targetText),
             },
           });
         }

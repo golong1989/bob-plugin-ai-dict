@@ -495,3 +495,22 @@ describe('compatibility & config', () => {
     expect(count).toBe(1);
   });
 });
+
+describe('dict stream preview', () => {
+  it('only renders complete lines, so frames never show raw tags or empty values', () => {
+    const full = 'WORD: run\nUS: rʌn\nPOS: v. | 跑\nEX: I run. | 我跑。\n';
+    const previews: string[][] = [];
+    onStreamReq = (cfg) => {
+      for (let i = 0; i < full.length; i += 2) cfg.streamHandler({ text: sse(full.slice(i, i + 2)) });
+      cfg.handler({ response: { statusCode: 200 }, data: '' });
+    };
+    translate(mkQuery({ onStream: (p: Cfg) => previews.push(p.result.toParagraphs) }), () => {});
+
+    expect(previews.map((p) => p.length)).toEqual([1, 2, 3, 4]);
+    for (let i = 1; i < previews.length; i++) {
+      expect(previews[i]?.slice(0, -1)).toEqual(previews[i - 1]);
+    }
+    expect(previews.flat()).not.toContain('');
+    expect(previews[1]).toEqual(['run', '美 /rʌn/']);
+  });
+});
