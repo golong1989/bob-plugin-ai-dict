@@ -18,7 +18,8 @@ export function buildDictSystemPrompt(query: TextTranslateQuery, dictPromptExtra
     '规则：',
     '- POS 至少一行，可多行，按常用程度排序；同一词性的多个释义写在同一行、用「；」分隔；',
     '- FORM 每种变形单独一行，只写真实存在的变形，没有就省略，禁止编造；',
-    '- 词组或没有音标的词，省略 US/UK 行；',
+    '- 单个英文单词必须给出 US、UK 音标行（复合词、缩写、专有名词等有标准读音的都算），只有词组或确实无音标的词才省略；',
+    '- 音标单独占一行，标签用 US/UK、冒号用半角，不要把音标写进 WORD 行；',
     '- EX 给 1-2 行，NOTE 给 1 行；',
     '- 除上述字段行外，不要输出任何其他内容。',
   ].join('\n');
@@ -48,6 +49,7 @@ export function buildReverseDictSystemPrompt(query: TextTranslateQuery, dictProm
     `NOTE: <词根词缀或联想记忆，一句话>`,
     '规则：',
     '- WORD 必须是英文；对应英文是词组或习语时（如 功成名就 → achieve fame and success），WORD 写完整词组，省略 US/UK 行，POS 用 phr. 或 idiom 标注；',
+    '- 对应英文是单个单词时，必须给出 US、UK 音标行，音标单独占一行，不要写进 WORD 行；',
     '- POS 至少一行，可多行，按常用程度排序；同一词性的多个释义写在同一行、用「；」分隔；',
     '- FORM 每种变形单独一行，只写真实存在的变形，没有就省略，禁止编造；',
     '- EX 给 1-2 行，NOTE 给 1 行；',

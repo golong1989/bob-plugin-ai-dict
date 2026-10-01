@@ -17,6 +17,11 @@ describe('buildDictSystemPrompt', () => {
     expect(p).toContain('GenAm');
     expect(p).toContain('RP');
   });
+  it('requires phonetics for single words so US/UK rows are not dropped', () => {
+    const p = buildDictSystemPrompt(q, '');
+    expect(p).toContain('单个英文单词必须给出');
+    expect(p).toContain('不要把音标写进 WORD 行');
+  });
   it('appends extra requirement when provided', () => {
     expect(buildDictSystemPrompt(q, '例句偏计算机')).toContain('补充要求：例句偏计算机');
   });
@@ -39,6 +44,9 @@ describe('buildReverseDictSystemPrompt', () => {
   });
   it('covers multi-word idiom headwords', () => {
     expect(buildReverseDictSystemPrompt(rq, '')).toContain('idiom');
+  });
+  it('requires phonetics when the english equivalent is a single word', () => {
+    expect(buildReverseDictSystemPrompt(rq, '')).toContain('单个单词时，必须给出');
   });
   it('appends extra requirement when provided', () => {
     expect(buildReverseDictSystemPrompt(rq, '例句偏日常口语')).toContain('补充要求：例句偏日常口语');

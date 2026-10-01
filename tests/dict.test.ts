@@ -35,6 +35,39 @@ describe('parseDictText', () => {
     );
   });
 
+  describe('format tolerance (音标丢失修复)', () => {
+    const pos = 'POS: adj. | 极好的';
+
+    it('accepts fullwidth colon after tag (US：xxx)', () => {
+      const x = parseDictText(`WORD: super\nUS：ˈsuːpər\n${pos}`, 'super')!;
+      expect(x.phonetics.map((p) => p.value)).toEqual(['ˈsuːpər']);
+    });
+
+    it('accepts markdown bold tags (**US**: xxx)', () => {
+      const x = parseDictText(`WORD: super\n**US**: ˈsuːpər\n${pos}`, 'super')!;
+      expect(x.phonetics.map((p) => p.value)).toEqual(['ˈsuːpər']);
+    });
+
+    it('accepts chinese alias labels (美式/英式)', () => {
+      const x = parseDictText(`WORD: super\n美式: ˈsuːpər\n英式: ˈsuːpə(r)\n${pos}`, 'super')!;
+      expect(x.phonetics.map((p) => [p.type, p.value])).toEqual([
+        ['us', 'ˈsuːpər'],
+        ['uk', 'ˈsuːpə(r)'],
+      ]);
+    });
+
+    it('extracts inline phonetic from WORD line (WORD: super /ˈsuːpər/)', () => {
+      const x = parseDictText(`WORD: super /ˈsuːpər/\n${pos}`, 'super')!;
+      expect(x.word).toBe('super');
+      expect(x.phonetics.map((p) => p.value)).toEqual(['ˈsuːpər']);
+    });
+
+    it('tolerance applies to POS too (POS：xxx)', () => {
+      const x = parseDictText(`WORD: super\nUS: ˈsuːpər\nPOS：adj. | 极好的`, 'super')!;
+      expect(x.parts[0]).toEqual({ part: 'adj.', means: ['极好的'] });
+    });
+  });
+
   it('splits parts and means', () => {
     expect(d.parts).toHaveLength(2);
     expect(d.parts[0]).toEqual({ part: 'v.', means: ['跑', '经营', '运行'] });

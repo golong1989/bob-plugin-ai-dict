@@ -129,12 +129,13 @@ export const translate: TextTranslate = (query, completion) => {
     const from = query.detectFrom;
     const to = query.detectTo;
     if (dictMode) {
+      // raw 回传模型原文：音标等字段丢失时，可在 Bob 日志里对照原始输出定位问题
       const dict = parseDictText(fullText, query.text.trim());
       if (dict) {
         // 词典结果按 Bob 约定不带 toParagraphs；类型要求它，故断言以保持载荷形状
-        return { from, to, toDict: dict } as TextTranslateResult;
+        return { from, to, toDict: dict, raw: fullText } as TextTranslateResult;
       }
-      return { from, to, toParagraphs: dictPreviewParagraphs(fullText) };
+      return { from, to, toParagraphs: dictPreviewParagraphs(fullText), raw: fullText };
     }
     return { from, to, toParagraphs: textToParagraphs(fullText) };
   }

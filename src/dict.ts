@@ -9,6 +9,60 @@ function youdaoTts(word: string, type: 'us' | 'uk'): TtsResult {
   };
 }
 
+// 字段标签别名表：模型偶尔用中文标签或全角冒号写行头，统一归一到标准标签。
+// 只归一「标签部分」，值内容不动（例句译文里的中文冒号必须原样保留）。
+const TAG_ALIASES: Record<string, string> = {
+  单词: 'WORD',
+  词: 'WORD',
+  美: 'US',
+  美式: 'US',
+  美音: 'US',
+  美式音标: 'US',
+  音标: 'US',
+  英: 'UK',
+  英式: 'UK',
+  英音: 'UK',
+  英式音标: 'UK',
+  词性: 'POS',
+  变形: 'FORM',
+  例句: 'EX',
+  记忆: 'NOTE',
+  记忆提示: 'NOTE',
+  又译: 'ALT',
+  其他译法: 'ALT',
+};
+
+// 行头归一化：剥掉 markdown 加粗/代码标记，全角冒号转半角（仅首个分隔符），中文标签映射。
+// 返回 [tag, value]；不是「标签: 值」结构时 tag 为空串。
+function splitTagLine(line: string): [string, string] {
+  // 半角冒号在前用半角，否则用全角：避免「US：跑：义」这类值里带冒号时切错位置
+  const half = line.indexOf(':');
+  const full = line.indexOf('：');
+  const idx = half !== -1 && (full === -1 || half < full) ? half : full;
+  if (idx === -1) return ['', ''];
+  let tag = line
+    .slice(0, idx)
+    .replace(/[*`#[\]]/g, '')
+    .trim()
+    .toUpperCase();
+  tag = TAG_ALIASES[tag] || tag;
+  return [tag, line.slice(idx + 1).trim()];
+}
+
+// IPA 特征字符：判断「/.../」里是音标而不是普通斜杠文本
+const IPA_CHARS = /[ˈˌːæɑɒɔəɛɜɪʊʌʃʒθðŋɹɻɝɚɫçɸβɛ]/;
+
+// 从 WORD 行的值里剥离内联音标（模型常写「WORD: super /ˈsuːpər/」），返回 [纯词, 音标或空]
+function extractInlinePhonetic(val: string): [string, string] {
+  const m = /\/([^/]+)\//.exec(val);
+  const ipa = m?.[1]?.trim();
+  if (m && ipa && IPA_CHARS.test(ipa)) {
+    const word = val.replace(m[0], '').trim();
+    if (word) return [word, ipa];
+  }
+  return [val, ''];
+}
+
 // 单词/短语判定：≤3 个拉丁词（允许连字符、撇号）
 export function isDictQuery(text: string): boolean {
   const t = text.trim();
@@ -30,7 +84,7 @@ export function stripSlashes(s: string): string {
   return (s || '').replace(/^\/+|\/+$/g, '').trim();
 }
 
-// 紧凑行格式 → toDict；无词性词义时返回 null，由调用方兜底
+// 紧凑行格式 → toDict；无词性词义时返回 null，由调用方兜底。
 export function parseDictText(text: string, queryText: string): DictObject | null {
   let word = queryText;
   const phonetics: Phonetic[] = [];
@@ -41,22 +95,29 @@ export function parseDictText(text: string, queryText: string): DictObject | nul
   for (const raw of (text || '').split('\n')) {
     const line = raw.replace(/\r$/, '').trim();
     if (!line) continue;
-    const idx = line.indexOf(':');
-    if (idx === -1) continue;
-    const tag = line.slice(0, idx).trim().toUpperCase();
-    const val = line.slice(idx + 1).trim();
-    if (!val) continue;
+    const [tag, val] = splitTagLine(line);
+    if (!tag || !val) continue;
 
     switch (tag) {
-      case 'WORD':
-        word = val;
+      case 'WORD': {
+        // 模型可能把音标内联在词后（WORD: super /ˈsuːpər/），拆出来补进 phonetics。
+        // 内联音标不分美英、按美音处理；已有显式 US 行时不覆盖
+        const [w, ipa] = extractInlinePhonetic(val);
+        word = w;
+        if (ipa && !phonetics.some((p) => p.type === 'us')) {
+          phonetics.push({ type: 'us', value: stripSlashes(ipa) });
+        }
         break;
+      }
       case 'US':
-        phonetics.push({ type: 'us', value: stripSlashes(val) });
+      case 'UK': {
+        const type = tag === 'US' ? 'us' : 'uk';
+        // 内联音标已占位同类型时不重复追加，以显式 US/UK 行优先覆盖
+        const existing = phonetics.find((p) => p.type === type);
+        if (existing) existing.value = stripSlashes(val);
+        else phonetics.push({ type, value: stripSlashes(val) });
         break;
-      case 'UK':
-        phonetics.push({ type: 'uk', value: stripSlashes(val) });
-        break;
+      }
       case 'POS': {
         const pi = val.indexOf('|');
         const part = pi === -1 ? '' : val.slice(0, pi).trim();
@@ -109,23 +170,25 @@ export function parseDictText(text: string, queryText: string): DictObject | nul
   return dict;
 }
 
-// 流式预览 / 解析失败兜底：紧凑行格式 → 易读段落
+// 流式预览 / 解析失败兜底：紧凑行格式 → 易读段落。
+// 与 parseDictText 共用 splitTagLine 归一化，保证预览和最终卡片对同一行判定一致。
 export function dictPreviewParagraphs(text: string): string[] {
   const out: string[] = [];
   for (const raw of (text || '').split('\n')) {
     const line = raw.replace(/\r$/, '').trim();
     if (!line) continue;
-    const idx = line.indexOf(':');
-    if (idx === -1) {
+    const [tag, val] = splitTagLine(line);
+    if (!tag || !val) {
+      // 无冒号或空值行是正文（如模型判为句子后输出的纯译文），保留整行
       out.push(line);
       continue;
     }
-    const tag = line.slice(0, idx).trim().toUpperCase();
-    const val = line.slice(idx + 1).trim();
     switch (tag) {
-      case 'WORD':
-        out.push(val);
+      case 'WORD': {
+        const [w, ipa] = extractInlinePhonetic(val);
+        out.push(ipa ? `${w} /${stripSlashes(ipa)}/` : val);
         break;
+      }
       case 'US':
         out.push(`美 /${stripSlashes(val)}/`);
         break;
